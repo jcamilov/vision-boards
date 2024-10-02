@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Heart, MoreHorizontal, Upload } from "lucide-react";
 import { CloudinaryContext, Image } from "cloudinary-react";
 import Script from "next/script";
+import { toggleTag } from "../actions/tagActions";
 
 export default function Gallery() {
   const [favorites, setFavorites] = useState(new Set());
@@ -20,8 +21,23 @@ export default function Gallery() {
     try {
       const response = await fetch("/api/getImages");
       const data = await response.json();
-      console.log("Fetched images:", data); // Debug log
+      console.log("Fetched images data:", data);
+
+      if (!Array.isArray(data)) {
+        console.error("Received data is not an array:", data);
+        setImages([]);
+        return;
+      }
+
       setImages(data);
+
+      // Update favorites based on tags
+      const newFavorites = new Set(
+        data
+          .filter((image) => image.tags && image.tags.includes("favorite"))
+          .map((image) => image.public_id)
+      );
+      setFavorites(newFavorites);
     } catch (error) {
       console.error("Error fetching images:", error);
       setImages([]); // Ensure images is an empty array if fetch fails
@@ -30,14 +46,28 @@ export default function Gallery() {
     }
   };
 
-  const toggleFavorite = (id) => {
+  const toggleFavorite = async (id) => {
     setFavorites((prevFavorites) => {
       const newFavorites = new Set(prevFavorites);
-      if (newFavorites.has(id)) {
-        newFavorites.delete(id);
-      } else {
+      const isFavorite = !newFavorites.has(id);
+
+      if (isFavorite) {
         newFavorites.add(id);
+      } else {
+        newFavorites.delete(id);
       }
+
+      // Update tag on Cloudinary using server action
+      toggleTag(id, "favorite", isFavorite)
+        .then(() =>
+          console.log(
+            `Image ${id} ${
+              isFavorite ? "marked as favorite" : "unmarked as favorite"
+            }`
+          )
+        )
+        .catch((error) => console.error("Error updating image tag:", error));
+
       return newFavorites;
     });
   };
@@ -48,7 +78,7 @@ export default function Gallery() {
     try {
       // Fetch the signature from our API route
       const response = await fetch("/api/generateSignature");
-      const { timestamp, signature } = await response.json();
+      const { timestamp, signature, ...otherParams } = await response.json();
 
       if (typeof window.cloudinary !== "undefined") {
         const widget = window.cloudinary.createUploadWidget(
@@ -57,13 +87,15 @@ export default function Gallery() {
             apiKey: process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY,
             uploadSignatureTimestamp: timestamp,
             uploadSignature: signature,
-            // Remove uploadPreset as we're using signed uploads now
+            ...otherParams,
           },
           (error, result) => {
             if (!error && result && result.event === "success") {
               console.log("Upload successful:", result.info);
               // Refresh the image list after successful upload
               fetchImages();
+            } else if (error) {
+              console.error("Upload error:", error);
             }
           }
         );
