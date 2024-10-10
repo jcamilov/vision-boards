@@ -6,6 +6,8 @@ import ModalGallery from "@/components/modal-gallery"; // Add this import
 import Script from "next/script";
 import { CloudinaryContext, Image, Transformation } from "cloudinary-react";
 import { CldImage } from "next-cloudinary";
+import axios from "axios";
+import { config } from "@/config";
 
 export default function Edit() {
   const [referenceImage, setReferenceImage] = useState(null);
@@ -82,19 +84,32 @@ export default function Edit() {
     }
   }, [uploadWidget]);
 
+  // THIS IS NOT SAVING TO CLOUDINARY'S GALLERY YET
+  const handleSaveToGallery = async () => {
+    console.log("Saving to gallery:", resultImage);
+    if (resultImage) {
+      const formData = new FormData();
+      formData.append("file", resultImage);
+      formData.append("upload_preset", "your_upload_preset"); // Replace with your actual upload preset if needed
+      formData.append("folder", "your_upload_folder"); // Specify the folder in Cloudinary where you want to save the image
+
+      try {
+        const uploadResponse = await axios.post(
+          `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+          formData
+        );
+        console.log("Image saved to gallery:", uploadResponse.data);
+      } catch (error) {
+        console.error("Error saving image to gallery:", error);
+      }
+    } else {
+      console.warn("No image to save.");
+    }
+  };
+
   const handleImageSelected = (selectedImage) => {
     console.log("Selected image from edit page:", selectedImage);
-
-    // Add Cloudinary transformations to the URL
-    const transformedUrl = selectedImage.url.replace(
-      "/upload/",
-      "/upload/c_fill,g_auto,f_auto,q_auto/"
-    );
-
-    setReferenceImage({
-      ...selectedImage,
-      url: transformedUrl,
-    });
+    setReferenceImage(selectedImage);
     setIsModalOpen(false);
     // Handle the selected image (e.g., add to favorites, display details, etc.)
   };
@@ -103,12 +118,56 @@ export default function Edit() {
     setPrompt(e.target.value);
   };
 
-  const handleGoForIt = () => {
+  const handleGoForIt = async () => {
     console.log("Reference Image:", referenceImage);
     console.log("Prompt:", prompt);
-    // Here you would typically call an API to generate the image
-    // For now, we'll just set a placeholder
-    setResultImage("/placeholder.svg?height=400&width=600");
+    console.log("Model:", config.text2image.model);
+    console.log("API Key:", process.env.NEXT_PUBLIC_SEGMIND_API_KEY);
+
+    setIsLoading(true);
+
+    const url = `https://api.segmind.com/v1/${config.text2image.model}`;
+    const data = {
+      prompt: prompt,
+      steps: 4,
+      seed: Math.floor(Math.random() * 1000000),
+      aspect_ratio: "1:1",
+      base64: false,
+    };
+
+    try {
+      const response = await axios.post(url, data, {
+        headers: { "x-api-key": process.env.NEXT_PUBLIC_SEGMIND_API_KEY },
+        responseType: "arraybuffer",
+      });
+
+      const base64Image = Buffer.from(response.data, "binary").toString(
+        "base64"
+      );
+      const dataURI = `data:image/jpeg;base64,${base64Image}`;
+      setResultImage(dataURI);
+
+      // Upload to Cloudinary
+      const formData = new FormData();
+      formData.append("file", dataURI);
+      // Removed upload_preset from the formData
+      const uploadResponse = await axios.post(
+        `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+        formData
+      );
+
+      if (uploadResponse.data && uploadResponse.data.secure_url) {
+        setResultImage(uploadResponse.data.secure_url);
+        console.log("Uploaded Image URL:", uploadResponse.data.secure_url);
+      } else {
+        console.error("Upload failed:", uploadResponse.data);
+      }
+    } catch (error) {
+      console.error("Error generating or uploading image:", error);
+      // Handle the error (e.g., show an error message to the user)
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleUseAsReference = () => {
@@ -134,14 +193,6 @@ export default function Edit() {
           <div className="w-full md:w-1/2 space-y-4">
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 relative w-full h-64">
               {referenceImage ? (
-                // <Image
-                //   src={referenceImage.url}
-                //   alt={referenceImage.alt || "Selected image"}
-                //   fill
-                //   style={{ objectFit: "cover" }}
-                //   sizes="100vw"
-                //   priority
-                // />
                 <CldImage
                   src={referenceImage.public_id}
                   alt={referenceImage.alt || "Selected image"}
@@ -206,7 +257,11 @@ export default function Edit() {
               )}
             </div>
             <div className="flex gap-2">
-              <button className="btn btn-info" disabled={!resultImage}>
+              <button
+                className="btn btn-info"
+                disabled={!resultImage}
+                onClick={handleSaveToGallery}
+              >
                 Save to gallery
               </button>
               <button
