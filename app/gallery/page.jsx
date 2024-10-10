@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Heart, MoreHorizontal, Upload } from "lucide-react";
 import { CloudinaryContext, Image } from "cloudinary-react";
 import Script from "next/script";
@@ -10,10 +10,28 @@ export default function Gallery() {
   const [favorites, setFavorites] = useState(new Set());
   const [images, setImages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [uploadWidget, setUploadWidget] = useState(null);
 
   useEffect(() => {
     // Fetch images from Cloudinary when the component mounts
     fetchImages();
+
+    // Initialize the upload widget
+    if (typeof window !== "undefined" && window.cloudinary) {
+      const widget = window.cloudinary.createUploadWidget(
+        {
+          cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+          uploadPreset: process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET,
+        },
+        (error, result) => {
+          if (!error && result && result.event === "success") {
+            console.log("Upload successful:", result.info);
+            fetchImages();
+          }
+        }
+      );
+      setUploadWidget(widget);
+    }
   }, []);
 
   const fetchImages = async () => {
@@ -21,7 +39,6 @@ export default function Gallery() {
     try {
       const response = await fetch("/api/getImages");
       const data = await response.json();
-      console.log("Fetched images data:", data);
 
       if (!Array.isArray(data)) {
         console.error("Received data is not an array:", data);
@@ -72,43 +89,13 @@ export default function Gallery() {
     });
   };
 
-  const handleUpload = async () => {
-    console.log("Uploading image");
-
-    try {
-      // Fetch the signature from our API route
-      const response = await fetch("/api/generateSignature");
-      const { timestamp, signature, ...otherParams } = await response.json();
-
-      if (typeof window.cloudinary !== "undefined") {
-        const widget = window.cloudinary.createUploadWidget(
-          {
-            cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-            apiKey: process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY,
-            uploadSignatureTimestamp: timestamp,
-            uploadSignature: signature,
-            ...otherParams,
-          },
-          (error, result) => {
-            if (!error && result && result.event === "success") {
-              console.log("Upload successful:", result.info);
-              // Refresh the image list after successful upload
-              fetchImages();
-            } else if (error) {
-              console.error("Upload error:", error);
-            }
-          }
-        );
-        widget.open();
-      } else {
-        console.error("Cloudinary upload widget is not available");
-      }
-    } catch (error) {
-      console.error("Error generating upload signature:", error);
+  const handleUpload = useCallback(() => {
+    if (uploadWidget) {
+      uploadWidget.open();
+    } else {
+      console.error("Upload widget is not initialized");
     }
-  };
-
-  console.log("Current images state:", images); // Debug log
+  }, [uploadWidget]);
 
   return (
     <CloudinaryContext
@@ -120,10 +107,18 @@ export default function Gallery() {
       />
       <div className="container mx-auto px-4">
         <h1 className="text-4xl font-bold mb-6">Favorite Images</h1>
-        <button onClick={handleUpload} className="btn btn-primary mb-4">
-          <Upload className="w-4 h-4 mr-2" />
-          Upload Image
-        </button>
+        <div className="flex items-center mb-4">
+          <button onClick={handleUpload} className="btn btn-primary mr-4">
+            <Upload className="w-4 h-4 mr-2" />
+            Upload Image
+          </button>
+          <button
+            onClick={() => (window.location.href = "/edit")}
+            className="btn btn-primary"
+          >
+            Generate
+          </button>
+        </div>
         {isLoading ? (
           <p>Loading images...</p>
         ) : Array.isArray(images) && images.length === 0 ? (
