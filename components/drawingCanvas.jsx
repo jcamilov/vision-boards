@@ -6,7 +6,7 @@ import React, {
 } from "react";
 
 const DrawingCanvas = forwardRef(
-  ({ isActive, onMaskComplete, className }, ref) => {
+  ({ isActive, onMaskComplete, className, brushSize = 5 }, ref) => {
     const canvasRef = useRef(null);
     const isDrawing = useRef(false);
 
@@ -55,7 +55,7 @@ const DrawingCanvas = forwardRef(
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
 
-      ctx.lineWidth = 5;
+      ctx.lineWidth = brushSize;
       ctx.lineCap = "round";
       ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
 

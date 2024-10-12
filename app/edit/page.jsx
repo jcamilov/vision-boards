@@ -89,14 +89,13 @@ export default function Edit() {
     }
   }, [uploadWidget]);
 
-  // THIS IS NOT SAVING TO CLOUDINARY'S GALLERY YET
   const handleSaveToGallery = async () => {
     console.log("Saving to gallery:", resultImage);
     if (resultImage) {
       const formData = new FormData();
       formData.append("file", resultImage);
-      formData.append("upload_preset", "your_upload_preset"); // Replace with your actual upload preset if needed
-      formData.append("folder", "your_upload_folder"); // Specify the folder in Cloudinary where you want to save the image
+      formData.append("upload_preset", "my_upload_preset");
+      //formData.append("folder", "upload"); // Specify the folder in Cloudinary where you want to save the image
 
       try {
         const uploadResponse = await axios.post(
@@ -127,14 +126,8 @@ export default function Edit() {
     console.log("Reference Image:", referenceImage);
     console.log("Prompt:", prompt);
     console.log("Model:", config.text2image.model);
-    console.log("API Key:", process.env.NEXT_PUBLIC_SEGMIND_API_KEY);
 
     setIsLoading(true);
-
-    const url =
-      mode === "inpaint"
-        ? `https://api.segmind.com/v1/flux-inpaint`
-        : `https://api.segmind.com/v1/fast-flux-schnell`;
 
     // Helper function to convert image to base64
     const toB64 = async (url) => {
@@ -148,7 +141,7 @@ export default function Edit() {
       });
     };
 
-    const data =
+    const modelParams =
       mode === "inpaint"
         ? {
             base64: false,
@@ -175,32 +168,18 @@ export default function Edit() {
           };
 
     try {
-      const response = await axios.post(url, data, {
-        headers: { "x-api-key": process.env.NEXT_PUBLIC_SEGMIND_API_KEY },
-        responseType: "arraybuffer",
+      const response = await fetch("/api/runModel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode, modelParams }),
       });
 
-      const base64Image = Buffer.from(response.data, "binary").toString(
-        "base64"
-      );
-      const dataURI = `data:image/jpeg;base64,${base64Image}`;
-      setResultImage(dataURI);
-
-      // Upload to Cloudinary
-      const formData = new FormData();
-      formData.append("file", dataURI);
-      // Removed upload_preset from the formData
-      const uploadResponse = await axios.post(
-        `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
-        formData
-      );
-
-      if (uploadResponse.data && uploadResponse.data.secure_url) {
-        setResultImage(uploadResponse.data.secure_url);
-        console.log("Uploaded Image URL:", uploadResponse.data.secure_url);
-      } else {
-        console.error("Upload failed:", uploadResponse.data);
+      if (!response.ok) {
+        throw new Error("Failed to generate image");
       }
+
+      const data = await response.json();
+      setResultImage(data.image);
     } catch (error) {
       console.error("Error generating or uploading image:", error);
       // Handle the error (e.g., show an error message to the user)
@@ -209,9 +188,36 @@ export default function Edit() {
     }
   };
 
-  const handleUseAsReference = () => {
-    if (resultImage) {
-      setReferenceImage(resultImage);
+  const handleUseAsReference = async () => {
+    // Upload to Cloudinary
+    const formData = new FormData();
+    formData.append("file", resultImage);
+    formData.append("upload_preset", "my_upload_preset"); // Replace with your actual upload preset name
+    //formData.append("folder", "upload"); // Specify the folder in Cloudinary where you want to save the image
+    const uploadResponse = await axios.post(
+      `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+      formData
+    );
+
+    if (uploadResponse.data && uploadResponse.data.secure_url) {
+      setResultImage(uploadResponse.data.secure_url);
+      console.log("Uploaded Image URL:", uploadResponse.data.secure_url);
+    } else {
+      console.error("Upload failed:", uploadResponse.data);
+    }
+    if (uploadResponse.data && uploadResponse.data.secure_url) {
+      const uploadedImageUrl = uploadResponse.data.secure_url;
+      const urlParts = uploadedImageUrl.split("/");
+      const publicIdWithExtension = urlParts[urlParts.length - 1];
+      const publicId = publicIdWithExtension.split(".")[0];
+
+      console.log("The url para la de referencia:", uploadedImageUrl);
+
+      setReferenceImage({
+        public_id: publicId,
+        url: uploadedImageUrl,
+        alt: "Uploaded image from Cloudinary",
+      });
     }
   };
 
@@ -284,6 +290,7 @@ export default function Edit() {
                     isActive={isDrawingMode}
                     onMaskComplete={handleMaskComplete}
                     className="absolute inset-0"
+                    brushSize={50}
                   />
                 </>
               ) : (
