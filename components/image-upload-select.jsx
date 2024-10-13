@@ -11,6 +11,9 @@ export default function ImageUploadAndSelect({
   const [uploadWidget, setUploadWidget] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // TODO: get user_id from auth
+  const user_id = "user123";
+
   useEffect(() => {
     const loadCloudinaryScript = async () => {
       if (typeof window !== "undefined" && !window.cloudinary) {
@@ -31,7 +34,7 @@ export default function ImageUploadAndSelect({
   const fetchImages = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/getImages");
+      const response = await fetch(`/api/getImages?user_id=${user_id}`);
       const data = await response.json();
 
       if (!Array.isArray(data)) {
@@ -41,13 +44,6 @@ export default function ImageUploadAndSelect({
       }
 
       setImages(data);
-
-      // Update favorites based on tags
-      const newFavorites = new Set(
-        data
-          .filter((image) => image.tags && image.tags.includes("favorite"))
-          .map((image) => image.public_id)
-      );
     } catch (error) {
       console.error("Error fetching images:", error);
       setImages([]); // Ensure images is an empty array if fetch fails
@@ -75,22 +71,22 @@ export default function ImageUploadAndSelect({
     }
   };
 
-  const handleUpload = useCallback(() => {
-    if (uploadWidget) {
-      uploadWidget.open();
-    } else {
-      console.error("Upload widget is not initialized");
-    }
-  }, [uploadWidget]);
+  // const handleUpload = useCallback(() => {
+  //   if (uploadWidget) {
+  //     uploadWidget.open();
+  //   } else {
+  //     console.error("Upload widget is not initialized");
+  //   }
+  // }, [uploadWidget]);
 
-  const handleImageSelect = (image) => {
-    console.log("handleImageSelect:", image);
-    if (typeof handleImageSelected === "function") {
-      handleImageSelected(image);
-    } else {
-      console.error("handleImageSelected is not a function");
-    }
-  };
+  // const handleImageSelect = (image) => {
+  //   console.log("handleImageSelect:", image);
+  //   if (typeof handleImageSelected === "function") {
+  //     handleImageSelected(image);
+  //   } else {
+  //     console.error("handleImageSelected is not a function");
+  //   }
+  // };
 
   return (
     <CloudinaryContext
@@ -101,9 +97,6 @@ export default function ImageUploadAndSelect({
         strategy="beforeInteractive"
       />
       <div>
-        <button onClick={handleUpload} className="btn btn-primary mr-4">
-          Upload Image
-        </button>
         {isLoading ? (
           <p>Loading images...</p>
         ) : (

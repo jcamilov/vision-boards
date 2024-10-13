@@ -1,14 +1,14 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import ImageUploadAndSelect from "@/components/image-upload-select";
-import { Upload } from "lucide-react";
-import ModalGallery from "@/components/modal-gallery"; // Add this import
+import ModalGallery from "@/components/modal-gallery";
 import Script from "next/script";
-import { CloudinaryContext, Image, Transformation } from "cloudinary-react";
+import { CloudinaryContext } from "cloudinary-react";
 import { CldImage } from "next-cloudinary";
 import axios from "axios";
 import { config } from "@/config";
 import DrawingCanvas from "@/components/DrawingCanvas";
+import AdaptiveImage from "@/components/AdaptiveImage";
 
 export default function Edit() {
   const [referenceImage, setReferenceImage] = useState(null);
@@ -22,6 +22,9 @@ export default function Edit() {
   const [maskData, setMaskData] = useState(null);
   const [mode, setMode] = useState("generate");
   const canvasRef = useRef(null);
+
+  // TODO: get user_id from auth
+  const user_id = "user123";
 
   useEffect(() => {
     // Fetch images from Cloudinary when the component mounts
@@ -64,7 +67,7 @@ export default function Edit() {
   const fetchImages = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/getImages");
+      const response = await fetch(`/api/getImages?user_id=${user_id}`);
       const data = await response.json();
 
       if (!Array.isArray(data)) {
@@ -90,12 +93,11 @@ export default function Edit() {
   }, [uploadWidget]);
 
   const handleSaveToGallery = async () => {
-    console.log("Saving to gallery:", resultImage);
     if (resultImage) {
       const formData = new FormData();
       formData.append("file", resultImage);
       formData.append("upload_preset", "my_upload_preset");
-      //formData.append("folder", "upload"); // Specify the folder in Cloudinary where you want to save the image
+      formData.append("folder", `${user_id}/`); // Specify the folder in Cloudinary where you want to save the image
 
       try {
         const uploadResponse = await axios.post(
@@ -189,36 +191,42 @@ export default function Edit() {
   };
 
   const handleUseAsReference = async () => {
+    if (!resultImage) {
+      console.warn("No image to save.");
+      return;
+    }
+    setReferenceImage(resultImage);
+
     // Upload to Cloudinary
-    const formData = new FormData();
-    formData.append("file", resultImage);
-    formData.append("upload_preset", "my_upload_preset"); // Replace with your actual upload preset name
-    //formData.append("folder", "upload"); // Specify the folder in Cloudinary where you want to save the image
-    const uploadResponse = await axios.post(
-      `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
-      formData
-    );
+    // const formData = new FormData();
+    // formData.append("file", resultImage);
+    // formData.append("upload_preset", "my_upload_preset"); // Replace with your actual upload preset name
+    // //formData.append("folder", "upload"); // Specify the folder in Cloudinary where you want to save the image
+    // const uploadResponse = await axios.post(
+    //   `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+    //   formData
+    // );
 
-    if (uploadResponse.data && uploadResponse.data.secure_url) {
-      setResultImage(uploadResponse.data.secure_url);
-      console.log("Uploaded Image URL:", uploadResponse.data.secure_url);
-    } else {
-      console.error("Upload failed:", uploadResponse.data);
-    }
-    if (uploadResponse.data && uploadResponse.data.secure_url) {
-      const uploadedImageUrl = uploadResponse.data.secure_url;
-      const urlParts = uploadedImageUrl.split("/");
-      const publicIdWithExtension = urlParts[urlParts.length - 1];
-      const publicId = publicIdWithExtension.split(".")[0];
+    // if (uploadResponse.data && uploadResponse.data.secure_url) {
+    //   setResultImage(uploadResponse.data.secure_url);
+    //   console.log("Uploaded Image URL:", uploadResponse.data.secure_url);
+    // } else {
+    //   console.error("Upload failed:", uploadResponse.data);
+    // }
+    // if (uploadResponse.data && uploadResponse.data.secure_url) {
+    //   const uploadedImageUrl = uploadResponse.data.secure_url;
+    //   const urlParts = uploadedImageUrl.split("/");
+    //   const publicIdWithExtension = urlParts[urlParts.length - 1];
+    //   const publicId = publicIdWithExtension.split(".")[0];
 
-      console.log("The url para la de referencia:", uploadedImageUrl);
+    //   console.log("The url para la de referencia:", uploadedImageUrl);
 
-      setReferenceImage({
-        public_id: publicId,
-        url: uploadedImageUrl,
-        alt: "Uploaded image from Cloudinary",
-      });
-    }
+    //   setReferenceImage({
+    //     public_id: publicId,
+    //     url: uploadedImageUrl,
+    //     alt: "Uploaded image from Cloudinary",
+    //   });
+    // }
   };
 
   const handleToggleDrawingMode = () => {
@@ -276,15 +284,13 @@ export default function Edit() {
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 relative w-full h-64">
               {referenceImage ? (
                 <>
-                  <CldImage
-                    src={referenceImage.public_id}
-                    alt={referenceImage.alt || "Selected image"}
-                    fill
-                    crop="fill"
-                    gravity="auto:subject"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                    style={{ objectFit: "cover" }}
-                  />
+                  <div className="absolute inset-0">
+                    <AdaptiveImage
+                      src={referenceImage}
+                      alt={referenceImage.alt || "Selected image"}
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    />
+                  </div>
                   <DrawingCanvas
                     ref={canvasRef}
                     isActive={isDrawingMode}
@@ -355,7 +361,7 @@ export default function Edit() {
           <div className="w-full md:w-1/2 space-y-4">
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 h-96 flex items-center justify-center">
               {resultImage ? (
-                <img
+                <AdaptiveImage
                   src={resultImage}
                   alt="Result"
                   className="max-w-full max-h-full object-contain"

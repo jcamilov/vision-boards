@@ -12,6 +12,9 @@ export default function Gallery() {
   const [isLoading, setIsLoading] = useState(true);
   const [uploadWidget, setUploadWidget] = useState(null);
 
+  // TODO: get user_id from auth
+  const user_id = "user123";
+
   useEffect(() => {
     // Fetch images from Cloudinary when the component mounts
     fetchImages();
@@ -37,7 +40,7 @@ export default function Gallery() {
   const fetchImages = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/getImages");
+      const response = await fetch(`/api/getImages?user_id=${user_id}`);
       const data = await response.json();
 
       if (!Array.isArray(data)) {
