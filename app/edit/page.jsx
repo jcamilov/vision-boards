@@ -9,6 +9,7 @@ import axios from "axios";
 import { config } from "@/config";
 import DrawingCanvas from "@/components/DrawingCanvas";
 import AdaptiveImage from "@/components/AdaptiveImage";
+import { Cloudinary } from "@cloudinary/url-gen";
 
 export default function Edit() {
   const [referenceImage, setReferenceImage] = useState(null);
@@ -47,15 +48,42 @@ export default function Edit() {
               });
           },
         },
-        (error, result) => {
+        async (error, result) => {
           if (!error && result && result.event === "success") {
             console.log("Upload successful:", result.info);
-            // Set the uploaded image as the reference image
-            setReferenceImage({
-              public_id: result.info.public_id,
-              url: result.info.secure_url,
-              alt: result.info.original_filename,
+
+            // Fetch image details using Cloudinary API
+            const cld = new Cloudinary({
+              cloud: {
+                cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+              },
             });
+
+            try {
+              const imageDetails = await cld
+                .image(result.info.public_id)
+                .toURL();
+              const img = new Image();
+              img.onload = () => {
+                setReferenceImage({
+                  public_id: result.info.public_id,
+                  url: result.info.secure_url,
+                  alt: result.info.original_filename,
+                  width: img.naturalWidth,
+                  height: img.naturalHeight,
+                });
+              };
+              img.src = imageDetails;
+            } catch (error) {
+              console.error("Error fetching image details:", error);
+              // Fallback to setting image without width and height
+              setReferenceImage({
+                public_id: result.info.public_id,
+                url: result.info.secure_url,
+                alt: result.info.original_filename,
+              });
+            }
+
             fetchImages();
           }
         }
@@ -115,7 +143,13 @@ export default function Edit() {
 
   const handleImageSelected = (selectedImage) => {
     console.log("Selected image from edit page:", selectedImage);
-    setReferenceImage(selectedImage);
+    setReferenceImage({
+      public_id: selectedImage.public_id,
+      url: selectedImage.url,
+      alt: selectedImage.alt || "Selected image",
+      width: selectedImage.width || 800, // Add default width
+      height: selectedImage.height || 600, // Add default height
+    });
     setIsModalOpen(false);
     // Handle the selected image (e.g., add to favorites, display details, etc.)
   };
@@ -289,6 +323,8 @@ export default function Edit() {
                       src={referenceImage}
                       alt={referenceImage.alt || "Selected image"}
                       sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      width={referenceImage.width}
+                      height={referenceImage.height}
                     />
                   </div>
                   <DrawingCanvas

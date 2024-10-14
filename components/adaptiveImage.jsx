@@ -19,10 +19,17 @@ const AdaptiveImage = ({ src, alt, sizes, style, className, ...props }) => {
     ...props,
   };
 
+  // Add default width and height for Cloudinary images
+  const cloudinaryProps = {
+    ...commonProps,
+    width: 800, // Default width
+    height: 600, // Default height
+  };
+
   return (
     <div className="relative w-full h-full flex items-center justify-center">
       {isCloudinaryImage ? (
-        <CldImage src={src.public_id} {...commonProps} />
+        <CldImage src={src.public_id} {...cloudinaryProps} />
       ) : (
         <Image src={src} {...commonProps} />
       )}
